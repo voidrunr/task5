@@ -1,0 +1,53 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: gofermart
+      POSTGRES_PASSWORD: gofermart
+      POSTGRES_DB: gofermart
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gofermart"]
+      interval: 2s
+      timeout: 2s
+      retries: 10
+
+  accrual:
+    build: .
+    entrypoint: ["/usr/local/bin/accrual"]
+    environment:
+      RUN_ADDRESS: "0.0.0.0:8081"
+      DATABASE_URI: "postgres://gofermart:gofermart@postgres:5432/gofermart?sslmode=disable"
+      ACCRUAL_RATE_LIMIT: "60"
+      WORKER_INTERVAL: "200"
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  loyalty:
+    build: .
+    environment:
+      RUN_ADDRESS: "0.0.0.0:8080"
+      DATABASE_URI: "postgres://gofermart:gofermart@postgres:5432/gofermart?sslmode=disable"
+      ACCRUAL_SYSTEM_ADDRESS: "http://accrual:8081"
+      JWT_SECRET: "local-dev-secret"
+      SYNC_INTERVAL: "5"
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      accrual:
+        condition: service_started
+
+  frontend:
+    build: ./frontend
+    environment:
+      BACKEND_URL: "http://loyalty:8080"
+    ports:
+      - "3000:3000"
+    depends_on:
+      - loyalty
