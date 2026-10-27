@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS accrual_orders (
 );
 
 CREATE INDEX IF NOT EXISTS accrual_orders_pending_idx
-    ON accrual_orders (id) WHERE status IN ('REGISTERED', 'PROCESSING');
+    ON accrual_orders (id) WHERE status = 'REGISTERED';
 
 CREATE TABLE IF NOT EXISTS accrual_order_items (
     id BIGSERIAL PRIMARY KEY,
