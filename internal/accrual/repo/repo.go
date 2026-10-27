@@ -162,7 +162,7 @@ func (r *Repo) TakeOrderForProcessing(ctx context.Context) (Order, bool, error) 
 		`UPDATE accrual_orders SET status = 'PROCESSING'
 		 WHERE id = (
 		     SELECT id FROM accrual_orders
-		     WHERE status IN ('REGISTERED', 'PROCESSING')
+		     WHERE status = 'REGISTERED'
 		     ORDER BY id
 		     FOR UPDATE SKIP LOCKED
 		     LIMIT 1
@@ -175,9 +175,26 @@ func (r *Repo) TakeOrderForProcessing(ctx context.Context) (Order, bool, error) 
 	if err != nil {
 		return Order{}, false, fmt.Errorf("repo: take order: %w", err)
 	}
-	items, err := r.orderItems(ctx, o.ID)
+
+	rows, err := tx.Query(ctx,
+		`SELECT description, price FROM accrual_order_items WHERE order_id = $1 ORDER BY id`,
+		o.ID,
+	)
 	if err != nil {
-		return Order{}, false, err
+		return Order{}, false, fmt.Errorf("repo: select order items: %w", err)
+	}
+	defer rows.Close()
+
+	var items []models.OrderItem
+	for rows.Next() {
+		var it models.OrderItem
+		if err := rows.Scan(&it.Description, &it.Price); err != nil {
+			return Order{}, false, fmt.Errorf("repo: scan order item: %w", err)
+		}
+		items = append(items, it)
+	}
+	if err := rows.Err(); err != nil {
+		return Order{}, false, fmt.Errorf("repo: iterate order items: %w", err)
 	}
 	o.Items = items
 	if err := tx.Commit(ctx); err != nil {
